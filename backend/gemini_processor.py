@@ -65,37 +65,63 @@ class GeminiProcessor:
         4. **Tolerances**:
            - Capture `±`, `+`, `-`, or limit codes (H7, etc).
            
-        *** TRAINING EXAMPLE ***
-        Input: A shaft drawing with "Ø20±0,15" and a frame "[ ◎ | Ø0.1 | A ]" below it.
-        Output JSON:
-        [
-          { "type": "Dimension", "subtype": "Diameter", "value": "20", "tolerance": "±0.15", "original_text": "Ø20±0,15" },
-          { "type": "GD&T", "subtype": "Concentricity", "value": "Ø0.1", "datum": "A", "original_text": "[◎|Ø0.1|A]" }
+        *** EXTENSIVE TRAINING DATA ***
+        
+        Example 1 (Linear Dimension):
+        Input: A line with text "50 ± 0.1"
+        Output: { "type": "Dimension", "subtype": "Linear", "value": "50", "tolerance": "±0.1", "original_text": "50 ± 0.1" }
+
+        Example 2 (Diameter with Concentricity):
+        Input: Text "Ø20 H7" and a frame "[ ◎ | Ø0.05 | A ]"
+        Output: [
+          { "type": "Dimension", "subtype": "Diameter", "value": "20", "tolerance": "H7", "original_text": "Ø20 H7" },
+          { "type": "GD&T", "subtype": "Concentricity", "value": "Ø0.05", "datum": "A", "original_text": "[◎|Ø0.05|A]" }
         ]
+
+        Example 3 (Position with Modifiers):
+        Input: A frame "[ ⌖ | Ø0.25 (M) | A | B | C ]"
+        Output: { "type": "GD&T", "subtype": "Position", "value": "Ø0.25 (M)", "datum": "A, B, C", "original_text": "[⌖|Ø0.25(M)|A|B|C]" }
+
+        Example 4 (Basic Dimension):
+        Input: A number "50" inside a rectangle: "[50]"
+        Output: { "type": "Dimension", "subtype": "Basic", "value": "50", "tolerance": "Basic", "original_text": "[50]" }
+
         *** END TRAINING ***
         
-        Extract all:
-        - Linear Dimensions
-        - Diameters (Symbol Ø)
-        - Basic Dimensions (Frame/Star/Oval)
-        - GD&T Symbols (Position, Flatness, etc)
-        
-        Return ONLY valid JSON.
+        Analyze the image and Return ONLY a JSON Array.
         """
         
         try:
             img = Image.open(image_path)
-            response = self.model.generate_content([system_prompt, prompt, img])
+            # Use a slightly higher temperature to encourage creative extraction but strict JSON
+            generation_config = genai.types.GenerationConfig(
+                temperature=0.2, # Low temp for precision
+                candidate_count=1
+            )
+            
+            response = self.model.generate_content(
+                [system_prompt, prompt, img],
+                generation_config=generation_config
+            )
             
             # Clean response to ensure json
-            text = response.text
+            text = response.text.strip()
+            
+            # Debug: Print raw text to console (visible in Coolify logs)
+            print(f"GEMINI RAW RESPONSE: {text[:200]}...")
+
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0]
-                
+            
+            # Handle case where AI returns plain text list without code blocks
+            if not text.startswith('[') and '[' in text:
+                text = text[text.find('['):text.rfind(']')+1]
+
             return json.loads(text)
             
         except Exception as e:
-            print(f"Gemini Error: {e}")
+            print(f"Gemini Application Error: {e}")
+            # print(f"Failed Text was: {response.text}") # Uncomment if needed
             return []

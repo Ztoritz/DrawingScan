@@ -1,105 +1,136 @@
 import React from 'react';
 
 const ResultsList = ({ data }) => {
-    if (!data) return null;
-
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
         return (
-            <div className="w-full text-center p-8 glass-panel animate-slide-up mt-8">
-                <div className="inline-block p-4 rounded-full bg-white/5 mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+            <div className="w-full text-center p-12 glass-panel animate-slide-up mt-8 border border-white/5">
+                <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 animate-pulse">
+                    <span className="text-4xl">🔍</span>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-2">No Features Detected</h3>
-                <p className="text-gray-400 max-w-md mx-auto">
-                    We processed the file but couldn't identify any dimensions or GD&T symbols.
-                    <br /><span className="text-sm opacity-60">Try uploading a higher quality PDF or Image.</span>
+                <h3 className="text-xl font-bold text-white mb-2">No Features Detected</h3>
+                <p className="text-gray-400">
+                    The AI couldn't find any clear dimensions.
+                    <br /><span className="text-sm opacity-60">Try a clearer image or a different drawing.</span>
                 </p>
             </div>
         );
     }
 
-    const dimensions = data.filter(item => item.type === 'Dimension');
-    const gdt = data.filter(item => item.type === 'GD&T');
+    // Sort: Dimensions first, then GD&T
+    const sortedData = [...data].sort((a, b) => {
+        if (a.type === b.type) return 0;
+        return a.type === 'Dimension' ? -1 : 1;
+    });
+
+    const GDTFrame = ({ item }) => (
+        <div className="inline-flex items-center border-2 border-black bg-white text-black font-mono font-bold text-sm select-all">
+            {/* Symbol Box */}
+            <div className="px-2 py-1 border-r-2 border-black min-w-[30px] text-center">
+                {getGDTSymbol(item.subtype)}
+            </div>
+            {/* Value Box */}
+            <div className="px-2 py-1 border-r-2 border-black">
+                {item.value}
+            </div>
+            {/* Datum Box */}
+            {item.datum && (
+                <div className="px-2 py-1 bg-white">
+                    {item.datum}
+                </div>
+            )}
+        </div>
+    );
+
+    const getGDTSymbol = (subtype) => {
+        const map = {
+            'Concentricity': '◎',
+            'Position': '⌖',
+            'Perpendicularity': '⏊',
+            'Parallelism': '∥',
+            'Flatness': '⏥',
+            'Straightness': '—',
+            'Cylindricity': '⌭',
+            'Profile of Surface': '⏦'
+        };
+        // Return mapped symbol or first letter if unknown
+        return map[subtype] || subtype?.charAt(0) || '?';
+    };
 
     return (
-        <div className="w-full space-y-8 animate-slide-up">
-
-            {/* Search/Filter Header (Visual only for now) */}
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                    Extraction Results
+        <div className="w-full animate-slide-up">
+            <div className="flex justify-between items-end mb-6">
+                <h2 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500 uppercase tracking-tighter">
+                    Extracted Data
                 </h2>
-                <div className="text-sm text-gray-500 font-mono">
-                    {data.length} items found
+                <div className="text-xs font-mono text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded">
+                    CONFIDENCE: HIGH
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Linear Dimensions Column */}
-                <div className="glass-panel p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-1 h-6 bg-primary rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
-                        <h3 className="text-lg font-semibold text-white">Linear Dimensions</h3>
-                    </div>
-
-                    <div className="space-y-3">
-                        {dimensions.length === 0 ? (
-                            <p className="text-gray-500 italic text-sm">No dimensions detected.</p>
-                        ) : (
-                            dimensions.map((item, idx) => (
-                                <div key={idx} className="group flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all duration-200">
-                                    <div>
-                                        <div className="text-2xl font-mono font-bold text-white group-hover:text-primary transition-colors">
-                                            {item.value}
+            <div className="glass-panel overflow-hidden border border-white/10 rounded-xl shadow-2xl">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-white/5 border-b border-white/10 text-xs uppercase tracking-wider text-gray-400">
+                            <th className="p-4 font-medium">Type</th>
+                            <th className="p-4 font-medium">Subtype</th>
+                            <th className="p-4 font-medium">Measured Value</th>
+                            <th className="p-4 font-medium">Tolerance / Datum</th>
+                            <th className="p-4 font-medium text-right">Preview</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {sortedData.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-white/5 transition-colors group">
+                                <td className="p-4">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold border ${item.type === 'GD&T'
+                                            ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                            : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                        }`}>
+                                        {item.type}
+                                    </span>
+                                </td>
+                                <td className="p-4 text-gray-300 font-medium">
+                                    {item.subtype}
+                                </td>
+                                <td className="p-4">
+                                    <span className="font-mono text-lg font-bold text-white tracking-wide">
+                                        {item.value}
+                                    </span>
+                                </td>
+                                <td className="p-4">
+                                    {item.type === 'GD&T' ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 text-xs">DATUM:</span>
+                                            <b className="text-white">{item.datum || '-'}</b>
                                         </div>
-                                        <div className="text-xs text-gray-500 mt-1">
-                                            Page {item.page} • Raw: "{item.original_text}"
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className={`text-sm font-mono px-2 py-1 rounded bg-secondary/10 text-secondary border border-secondary/20`}>
+                                    ) : (
+                                        <span className={`font-mono text-sm px-2 py-1 rounded ${item.tolerance === 'Basic'
+                                                ? 'border border-white text-white'
+                                                : 'bg-white/10 text-gray-300'
+                                            }`}>
                                             {item.tolerance}
                                         </span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                {/* GD&T Column */}
-                <div className="glass-panel p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-1 h-6 bg-accent rounded-full shadow-[0_0_10px_rgba(236,72,153,0.5)]"></div>
-                        <h3 className="text-lg font-semibold text-white">GD&T Symbols</h3>
-                    </div>
-
-                    <div className="space-y-3">
-                        {gdt.length === 0 ? (
-                            <p className="text-gray-500 italic text-sm">No GD&T symbols detected.</p>
-                        ) : (
-                            gdt.map((item, idx) => (
-                                <div key={idx} className="group flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all duration-200">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-accent font-bold">{item.subtype}</span>
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-1">
-                                            Page {item.page}
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-sm text-gray-400 font-mono bg-black/30 px-2 py-1 rounded">
+                                    )}
+                                </td>
+                                <td className="p-4 text-right">
+                                    {item.type === 'GD&T' ? (
+                                        <GDTFrame item={item} />
+                                    ) : (
+                                        <div className="text-xs text-gray-600 font-mono">
                                             {item.original_text}
                                         </div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="mt-4 text-center">
+                <button onClick={() => window.print()} className="text-xs text-gray-500 hover:text-white transition-colors underline decoration-dotted">
+                    Export to PDF / Print Report
+                </button>
             </div>
         </div>
     );
