@@ -44,22 +44,57 @@ def process_file(file_path):
             open_cv_image = open_cv_image[:, :, ::-1].copy() 
             gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         elif len(open_cv_image.shape) == 2:
-            # Already grayscale
             gray = open_cv_image
         else:
-            # Handle RGBA
              open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGBA2BGR)
              gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         
-        # Simple thresholding
-        # _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+        # --- Preprocessing Improvements ---
+        # 1. Upscale the image (2x) to help with small text
+        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 
-        # Run OCR
-        # custom_config = r'--oem 3 --psm 6'
-        text_data = pytesseract.image_to_string(gray)
+        # 2. Adaptive Thresholding to handle uneven lighting/shadows
+        #    This creates a binary image where text pops out
+        gray_processed = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 2
+        )
         
-        extracted_items = extract_items_from_text(text_data, i + 1)
-        all_extracted_data.extend(extracted_items)
+        # 3. Denoise (Optional, can sometimes hurt small decimals, use cautiously)
+        # gray_processed = cv2.fastNlMeansDenoising(gray_processed, None, 10, 7, 21)
+
+        # --- Multi-Pass OCR ---
+        # Try different segmentation modes (PSM)
+        # 3 = Fully automatic page segmentation, but no OSD. (Default)
+        # 6 = Assume a single uniform block of text.
+        # 11 = Sparse text. Find as much text as possible in no particular order.
+        
+        configs = [
+            r'--oem 3 --psm 6',   # Good for blocks of text
+            r'--oem 3 --psm 4',   # Assume single column of text of variable sizes
+            r'--oem 3 --psm 11',  # Sparse text (good for drawings scattered with text)
+        ]
+        
+        combined_text = ""
+        for config in configs:
+            text = pytesseract.image_to_string(gray_processed, config=config)
+            combined_text += "\n" + text
+
+        # Also try on original gray image (without thresholding) just in case
+        combined_text += "\n" + pytesseract.image_to_string(gray, config=r'--oem 3 --psm 6')
+        
+        extracted_items = extract_items_from_text(combined_text, i + 1)
+        
+        # Simple deduplication based on exact value match to avoid duplicates from multi-pass
+        seen_values = set()
+        unique_items = []
+        for item in extracted_items:
+            # Create a unique signature
+            sig = f"{item['type']}-{item.get('value', '')}-{item.get('tolerance', '')}-{item.get('subtype', '')}"
+            if sig not in seen_values:
+                seen_values.add(sig)
+                unique_items.append(item)
+                
+        all_extracted_data.extend(unique_items)
 
     return all_extracted_data
 
