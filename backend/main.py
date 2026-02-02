@@ -5,6 +5,12 @@ import shutil
 import os
 import extractor
 import tempfile
+import models
+from database import engine
+from routers import auth
+
+# Create DB Tables
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -16,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router)
 
 @app.on_event("startup")
 async def startup_event():
