@@ -12,7 +12,8 @@ services:
     ports:
       - "80:80"
     environment:
-      - VITE_API_URL=http://localhost:8000 # Adjust this if testing locally with Docker
+      # Use the environment variable from Coolify, or fallback to localhost
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     restart: always
     depends_on:
       - backend
