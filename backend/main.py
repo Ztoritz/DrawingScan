@@ -23,9 +23,9 @@ def read_root():
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
-    allowed_types = ["application/pdf", "image/jpeg", "image/png", "image/tiff"]
+    allowed_types = ["application/pdf", "image/jpeg", "image/png", "image/tiff", "image/webp"]
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a PDF or Image (JPEG/PNG/TIFF).")
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a PDF or Image (JPEG/PNG/TIFF/WEBP).")
 
     # Save uploaded file typically
     try:

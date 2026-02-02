@@ -49,25 +49,20 @@ def process_file(file_path):
              open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGBA2BGR)
              gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         
-        # --- Preprocessing Improvements ---
-        # 1. Upscale the image (2x) to help with small text
-        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        # --- Preprocessing V2 (High Accuracy) ---
+        # 1. Aggressive Upscaling (3x) - Small text needs pixels
+        gray = cv2.resize(gray, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
 
-        # 2. Adaptive Thresholding to handle uneven lighting/shadows
-        #    This creates a binary image where text pops out
+        # 2. Sharpening Kernel - Makes text edges crisp
+        kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+        gray = cv2.filter2D(gray, -1, kernel)
+
+        # 3. Adaptive Thresholding 
         gray_processed = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 2
         )
         
-        # 3. Denoise (Optional, can sometimes hurt small decimals, use cautiously)
-        # gray_processed = cv2.fastNlMeansDenoising(gray_processed, None, 10, 7, 21)
-
         # --- Multi-Pass OCR ---
-        # Try different segmentation modes (PSM)
-        # 3 = Fully automatic page segmentation, but no OSD. (Default)
-        # 6 = Assume a single uniform block of text.
-        # 11 = Sparse text. Find as much text as possible in no particular order.
-        
         configs = [
             r'--oem 3 --psm 6',   # Good for blocks of text
             r'--oem 3 --psm 4',   # Assume single column of text of variable sizes
@@ -79,12 +74,13 @@ def process_file(file_path):
             text = pytesseract.image_to_string(gray_processed, config=config)
             combined_text += "\n" + text
 
-        # Also try on original gray image (without thresholding) just in case
-        combined_text += "\n" + pytesseract.image_to_string(gray, config=r'--oem 3 --psm 6')
+        # Also try on simple binary threshold (good for high contrast lines)
+        _, gray_binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+        combined_text += "\n" + pytesseract.image_to_string(gray_binary, config=r'--oem 3 --psm 6')
         
         extracted_items = extract_items_from_text(combined_text, i + 1)
         
-        # Simple deduplication based on exact value match to avoid duplicates from multi-pass
+        # Deduplication
         seen_values = set()
         unique_items = []
         for item in extracted_items:

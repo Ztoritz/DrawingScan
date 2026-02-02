@@ -31,7 +31,7 @@ const UploadZone = ({ onFileSelected }) => {
     };
 
     const validateAndPass = (file) => {
-        const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
+        const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
         if (!validTypes.includes(file.type)) {
             alert('Please upload a valid PDF or Image file.');
             return;
@@ -54,7 +54,7 @@ const UploadZone = ({ onFileSelected }) => {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleChange}
-                accept=".pdf,.jpg,.jpeg,.png,.tiff"
+                accept=".pdf,.jpg,.jpeg,.png,.tiff,.webp"
                 className="hidden"
             />
 
@@ -70,7 +70,7 @@ const UploadZone = ({ onFileSelected }) => {
             </h3>
             <p className="text-gray-400 text-sm text-center max-w-md">
                 Drag & drop your engineering drawing here, or <span className="text-primary hover:underline">browse</span> to select.
-                <br /><span className="text-xs opacity-60 mt-2 block">Supported formats: PDF, JPG, PNG, TIFF</span>
+                <br /><span className="text-xs opacity-60 mt-2 block">Supported formats: PDF, JPG, PNG, TIFF, WEBP</span>
             </p>
 
             {/* Glow effect on hover */}
