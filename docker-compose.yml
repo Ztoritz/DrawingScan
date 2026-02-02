@@ -3,16 +3,15 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     restart: always
 
   frontend:
     build: ./frontend
-    ports:
-      - "80:80"
+    expose:
+      - "80"
     environment:
-      # Use the environment variable from Coolify, or fallback to localhost
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     restart: always
     depends_on:
