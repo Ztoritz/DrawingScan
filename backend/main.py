@@ -23,17 +23,19 @@ def read_root():
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a PDF.")
+    allowed_types = ["application/pdf", "image/jpeg", "image/png", "image/tiff"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a PDF or Image (JPEG/PNG/TIFF).")
 
     # Save uploaded file typically
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        suffix = ".pdf" if file.content_type == "application/pdf" else os.path.splitext(file.filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
             shutil.copyfileobj(file.file, tmp_file)
             tmp_file_path = tmp_file.name
         
         # Process the file
-        results = extractor.process_pdf(tmp_file_path)
+        results = extractor.process_file(tmp_file_path)
         
         # Cleanup
         os.remove(tmp_file_path)

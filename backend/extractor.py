@@ -12,22 +12,44 @@ except ImportError:
 # NOTE: You might need to install poppler for pdf2image and tesseract-ocr executable for pytesseract
 # Windows users typically need to add them to PATH
 
-def process_pdf(pdf_path):
+def process_file(file_path):
     """
-    Main function to process a PDF and extract Drawing data.
+    Main function to process a file (PDF or Image) and extract Drawing data.
     """
-    images = convert_from_path(pdf_path)
+    file_path = str(file_path).lower()
     
+    if file_path.endswith('.pdf'):
+        images = convert_from_path(file_path)
+    else:
+        # Assume it's an image file supported by PIL/OpenCV
+        # We wrap it in a list to reuse the loop below
+        try:
+            # Open with PIL first to verify/convert
+            from PIL import Image
+            pil_image = Image.open(file_path)
+            images = [pil_image]
+        except Exception as e:
+            print(f"Error opening image: {e}")
+            return []
+
     all_extracted_data = []
 
     for i, image in enumerate(images):
         # Convert PIL image to OpenCV format
         open_cv_image = np.array(image) 
-        # Convert RGB to BGR 
-        open_cv_image = open_cv_image[:, :, ::-1].copy() 
-
-        # Preprocessing mainly for OCR accuracy
-        gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
+        
+        # Check if image has 3 channels (RGB) before converting
+        if len(open_cv_image.shape) == 3:
+             # Convert RGB to BGR 
+            open_cv_image = open_cv_image[:, :, ::-1].copy() 
+            gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
+        elif len(open_cv_image.shape) == 2:
+            # Already grayscale
+            gray = open_cv_image
+        else:
+            # Handle RGBA
+             open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGBA2BGR)
+             gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         
         # Simple thresholding
         # _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
