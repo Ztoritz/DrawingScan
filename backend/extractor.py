@@ -55,19 +55,28 @@ def process_file(file_path):
     for i, image in enumerate(images):
         open_cv_image = np.array(image)
         
-        # Ensure BGR format for OpenCV/EasyOCR
+        # Ensure BGR format for OpenCV
         if len(open_cv_image.shape) == 3:
-             # PIL is RGB, EasyOCR/OpenCV prefers BGR usually, 
-             # but EasyOCR actually handles RGB/BGR fine. Let's stick to standard OpenCV BGR.
             open_cv_image = open_cv_image[:, :, ::-1].copy() 
+            # Use Grayscale for OCR to save memory (1 channel vs 3)
+            gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         elif len(open_cv_image.shape) == 2:
-             # Convert gray to BGR for consistency
-             open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_GRAY2BGR)
+             gray = open_cv_image
         else:
              open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGBA2BGR)
-        
+             gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
+
+        # --- SAFETY OPTIMIZATION ---
+        # If image is too large, EasyOCR will OOM or Timeout.
+        # Limit max dimension to 2000px (sufficient for technical drawings).
+        height, width = gray.shape[:2]
+        max_dim = 2000
+        if width > max_dim or height > max_dim:
+            scaling_factor = max_dim / float(max(width, height))
+            gray = cv2.resize(gray, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
+
         # --- EasyOCR Execution ---
-        # detail=0 returns just the listing of text. 
+        # Pass the processed grayscale safety image
         # detail=1 returns [ [ [x,y]...], 'text', confidence ]
         # We use detail=0 for simpler parsing first, or detail=1 if we want to filter by confidence
         
@@ -79,7 +88,8 @@ def process_file(file_path):
         # combined_text = "\n".join(results)
         
         # Let's get detailed results to filter low confidence garbage
-        results = reader.readtext(open_cv_image, detail=1)
+        # Run on the optimized grayscale image
+        results = reader.readtext(gray, detail=1)
         
         combined_text = ""
         for (bbox, text, prob) in results:
