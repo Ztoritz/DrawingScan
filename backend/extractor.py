@@ -2,27 +2,79 @@ import re
 from pdf2image import convert_from_path
 import cv2
 import numpy as np
+import os
 
-# NOTE: You might need to install poppler for pdf2image and tesseract-ocr executable for pytesseract
-# Windows users typically need to add them to PATH
+# --- CLOUD AI INTEGRATION ---
+try:
+    from gemini_processor import GeminiProcessor
+except ImportError:
+    GeminiProcessor = None
 
-# Global reader instance
+# Global reader instances
 reader = None
+gemini_client = None
 
 def init_reader():
     """
-    Initializes the EasyOCR reader. Should be called on app startup.
-    This downloads the models if not present and loads them into memory.
+    Initializes OCR engines. Checks for API keys to determine mode.
     """
-    global reader
+    global reader, gemini_client
+    
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        print("🚀 Gemini AI Detected. Initializing Cloud Engine...")
+        try:
+            gemini_client = GeminiProcessor(api_key)
+            print("✅ Gemini Pro Connected.")
+        except Exception as e:
+            print(f"⚠️ Failed to connect to Gemini: {e}")
+    
+    # Always load EasyOCR as fallback or for hybrid use
     if reader is None:
         import easyocr
-        print("Initializing EasyOCR... (This may take a moment)")
-        # gpu=False for compatibility with basic VPS
+        print("Initializing EasyOCR (Fallback/Local)...")
         reader = easyocr.Reader(['en'], gpu=False)
         print("EasyOCR Initialized.")
 
 def process_file(file_path):
+    # Ensure init
+    global reader, gemini_client
+    if reader is None and gemini_client is None:
+        init_reader()
+
+    # --- PRIORITY: CLOUD AI (GEMINI) ---
+    if gemini_client:
+        print("🧠 Processing with Gemini Pro...")
+        try:
+            # Gemini handles PDFs/Images natively or via PIL.
+            # Convert PDF to image if needed first
+            target_path = file_path
+            
+            # If PDF, convert first page to image for Gemini (simplification for now)
+            # Full PDF support exists but image is safer for "Vision" endpoint usually
+            if str(file_path).lower().endswith('.pdf'):
+                images = convert_from_path(file_path)
+                if images:
+                    # Save temporary image for Gemini
+                    target_path = file_path + "_temp.png"
+                    images[0].save(target_path)
+            
+            results = gemini_client.extract_data(target_path)
+            
+            # Cleanup temp
+            if target_path != file_path and os.path.exists(target_path):
+                os.remove(target_path)
+                
+            if results:
+                return results
+            else:
+                print("Gemini returned empty results. Falling back to local OCR.")
+        except Exception as e:
+             print(f"Gemini Application Error: {e}. Falling back to local OCR.")
+
+    # --- FALLBACK: LOCAL EASYOCR ---
+    print("👀 Processing with Local EasyOCR...")
+
     """
     Main function to process a file (PDF or Image) using EasyOCR (Deep Learning).
     """
