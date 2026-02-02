@@ -258,21 +258,27 @@ def extract_items_from_text(text, page_number):
                 break
         
         # 5b. Feature Control Frame Structure Detection
-        # Regex to find: "| 0.15 | A" or "| Ø 0.15 M | A | B"
-        # Separators can be |, 1, I, !, l, or sometimes missing if boxed
+        # Relaxed Pattern: Look for "Value" followed by "Datum" 
+        # Value can start with Ø, Q, O, or just be a float like 0.15 or O.15
+        # Datum is a Capital Letter
+        # They might be separated by |, /, 1, I, spaces, or nothing
         
-        # Look for the characteristic Value + Datum pattern which is easier to spot than the symbol
-        # Ex: "0.15 A B" or "Ø 0.05 A" with some separators
-        fcf_pattern = r"([ØøQC]?\s*\d+[.,]\d+)\s*(?:[|/!lI1]|\s)\s*([A-Z])"
+        # Regex breakdown:
+        # 1. (?:[ØøQC]|O)? -> Optional Start Symbol (Diameter, Position, or letter O misread)
+        # 2. \s* -> Spaces
+        # 3. (?:[O0-9]+[.,][0-9]+) -> The Value (e.g. 0.15 or O.15)
+        # 4. \s*(?:[|/!lI1]|\s)*\s* -> Optional Separators (Pipes or spaces)
+        # 5. ([A-Z]) -> The Datum (Capture Group 2)
+        
+        fcf_pattern = r"((?:[ØøQCO]|\(?)\s*[O0-9]+[.,][0-9]+)\s*(?:[|/!lI1]|\s)*\s*([A-Z])"
         match_fcf = re.search(fcf_pattern, line)
         
         if match_fcf or found_gdt_type:
             # If we found a structure OR a symbol, try to extract the useful parts
             
-            # Default to Position if we see a frame/datum structure but no symbol (safe bet for hole patterns)
-            # or if the line starts with something that looks like a circle/target
+            # Default to Position if we see a frame/datum structure but no symbol
             if not found_gdt_type:
-                if match_fcf and ("Ø" in line or "Q" in line or "(" in line):
+                if match_fcf and ("Ø" in line or "Q" in line or "(" in line or "O" in line):
                      found_gdt_type = "Position (Inferred)"
                 else: 
                      found_gdt_type = "GD&T Frame"
@@ -280,14 +286,27 @@ def extract_items_from_text(text, page_number):
             # Extract the main value (tolerance)
             value = "Unknown"
             if match_fcf:
-                value = match_fcf.group(1).replace(' ', '')
-                if 'Ø' in line or 'Q' in line:
-                    if 'Ø' not in value:
-                        value = 'Ø' + value
+                # Group 1 is the value part
+                raw_val = match_fcf.group(1).replace(' ', '')
+                # normalize O to 0 if it's the leading digit (O.15 -> 0.15)
+                # But careful not to replace Ø (if represented as O)
+                if 'O.' in raw_val or 'O,' in raw_val:
+                    raw_val = raw_val.replace('O.', '0.').replace('O,', '0,')
+                    
+                value = raw_val
+                
+                # Ensure diameter symbol is pretty
+                if 'Ø' in line or 'Q' in line or 'O' in line:
+                    if 'Ø' not in value and '0.' in value: # Only add if it looks like a diameter value
+                         # Check if the O was actually the diameter symbol
+                         if value.startswith('0'):
+                             value = 'Ø' + value
             
-            # Don't add if it's just a loose number we already caught as a dimension
-            # GD&T usually involves Datums (A, B, C)
-            if match_fcf or "A" in line or "B" in line or "C" in line:
+            # Strict Filter: Must have a Datum (A, B, C...) or a strong GDT Symbol to be valid
+            # This prevents random text "Version 1.0 A" from becoming GD&T
+            has_datum = match_fcf and match_fcf.group(2) in "ABCDEFGHJKLMNPRSTuvwxyz"
+            
+            if found_gdt_type and (has_datum or found_gdt_type != "GD&T Frame"):
                 items.append({
                     "type": "GD&T",
                     "subtype": found_gdt_type,
