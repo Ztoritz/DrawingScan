@@ -7,6 +7,26 @@ function App() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [serverStatus, setServerStatus] = useState('checking'); // checking, online, offline
+
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  // Check server health on mount
+  React.useEffect(() => {
+    const checkServer = async () => {
+      try {
+        await axios.get(`${apiUrl}/`);
+        setServerStatus('online');
+      } catch (err) {
+        console.error("Server Health Check Failed:", err);
+        setServerStatus('offline');
+      }
+    };
+    checkServer();
+    // Poll every 10 seconds to keep status live
+    const interval = setInterval(checkServer, 10000);
+    return () => clearInterval(interval);
+  }, [apiUrl]);
 
   const handleFileSelected = async (file) => {
     setLoading(true);
@@ -17,10 +37,6 @@ function App() {
     formData.append('file', file);
 
     try {
-      // Use environment variable for API URL (set in Coolify/Docker)
-      // Fallback to localhost for local development if not set
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
       const response = await axios.post(`${apiUrl}/upload/`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -30,7 +46,9 @@ function App() {
       setResults(response.data.results);
     } catch (err) {
       console.error(err);
-      setError('Failed to process file. Please ensure the backend is running.');
+      // Extract detailed error message if available
+      const backendMsg = err.response?.data?.detail || err.response?.data?.message || err.message;
+      setError(`Failed to process: ${backendMsg}`);
     } finally {
       setLoading(false);
     }
@@ -41,8 +59,16 @@ function App() {
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
-        <header className="mb-12 text-center animate-fade-in">
-          <h1 className="text-5xl font-black tracking-tight mb-4">
+        <header className="mb-12 text-center animate-fade-in relative">
+          {/* Server Status Indicator */}
+          <div className="absolute top-0 right-0 flex items-center space-x-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+            <div className={`w-2 h-2 rounded-full ${serverStatus === 'online' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : serverStatus === 'offline' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+            <span className="text-xs text-gray-400 font-mono tracking-wider uppercase">
+              {serverStatus === 'online' ? 'System Online' : serverStatus === 'offline' ? 'Backend Disconnected' : 'Syncing...'}
+            </span>
+          </div>
+
+          <h1 className="text-5xl font-black tracking-tight mb-4 mt-8">
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">
               Scan-Drawing
             </span>
@@ -58,7 +84,13 @@ function App() {
 
           {/* Upload Area */}
           <div className={`transition-all duration-500 ${results ? 'scale-90 opacity-80 hover:scale-100 hover:opacity-100' : ''}`}>
-            <UploadZone onFileSelected={handleFileSelected} />
+            {/* Disable upload if server is offline */}
+            <div className={serverStatus === 'offline' ? 'pointer-events-none opacity-50 grayscale' : ''}>
+              <UploadZone onFileSelected={handleFileSelected} />
+            </div>
+            {serverStatus === 'offline' && (
+              <p className="text-red-400 text-center mt-4 text-sm">Cannot upload: Backend server is unreachable.</p>
+            )}
           </div>
 
           {/* Loading State */}
@@ -75,7 +107,7 @@ function App() {
 
           {/* Error Message */}
           {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-center text-red-200 animate-fade-in">
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-center text-red-200 animate-fade-in font-mono text-sm break-all">
               {error}
             </div>
           )}
