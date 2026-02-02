@@ -47,12 +47,25 @@ class GeminiProcessor:
         system_prompt = self.load_training_examples()
         
         prompt = """
-        Analyze this engineering drawing. 
+        Analyze this engineering drawing with high precision.
+        
+        CRITICAL INSTRUCTIONS:
+        1. **Look for Basic Dimensions**: These are numbers inside a rectangular box OR an oval/capsule shape (e.g. (12) or [12]).
+        2. **Distinguish Ø from 0**: 
+           - If a number is `010`, it is likely `Ø10`. 
+           - Look for value `Ø` (Diameter) vs `R` (Radius) vs `M` (Metric).
+        3. **GD&T Frames**:
+           - Look for `[Symbol | Value | Datum]`.
+           - Locate Feature Control Frames attached to dimensions.
+           - Extract the full content (e.g. Position 0.15 relative to A and B).
+        4. **Tolerances**:
+           - Capture `±`, `+`, `-`, or limit codes (H7, etc).
+        
         Extract all:
-        1. Linear Dimensions (with tolerances like ±0.1 or limits like h7)
-        2. Diameters (symbol Ø)
-        3. Basic Dimensions (numbers in boxes or parentheses)
-        4. GD&T Feature Control Frames (e.g. [Position | 0.1 | A | B])
+        - Linear Dimensions
+        - Diameters (Symbol Ø)
+        - Basic Dimensions (Frame/Star/Oval)
+        - GD&T Symbols (Position, Flatness, etc)
         
         Return ONLY valid JSON.
         """

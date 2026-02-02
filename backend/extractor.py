@@ -193,6 +193,10 @@ def clean_ocr_text(line):
     # Fix Diameter symbols
     line = re.sub(r'(?<![A-Za-z])(?:Q|O|o)(?=\d)', 'Ø', line) # Q10 -> Ø10
     
+    # Fix "010" -> "Ø10" (Leading zero followed by integer digits is usually a misread Diameter)
+    # Match 0 followed by digit, BUT NOT followed by a dot (0.15 is valid)
+    line = re.sub(r'\b0(?=\d+(?!\.))', 'Ø', line)
+
     # Fix Plus/Minus errors
     line = line.replace('t/', '+/-').replace('I-', '+/-')
     
