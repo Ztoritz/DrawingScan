@@ -7,10 +7,10 @@
 @layer base {
   body {
     @apply bg-background text-gray-100 antialiased selection:bg-primary/30 selection:text-white;
-    background-image: 
-        radial-gradient(circle at top left, rgba(59, 130, 246, 0.15), transparent 40%),
-        radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), transparent 40%),
-        radial-gradient(circle at bottom center, rgba(236, 72, 153, 0.1), transparent 50%);
+    background-image:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.15), transparent 40%),
+      radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), transparent 40%),
+      radial-gradient(circle at bottom center, rgba(236, 72, 153, 0.1), transparent 50%);
     background-attachment: fixed;
   }
 }
@@ -19,17 +19,13 @@
   .glass-panel {
     @apply bg-surface/60 backdrop-blur-md border border-white/5 shadow-2xl rounded-2xl;
   }
-  
+
   .glass-button {
-    @apply px-6 py-3 rounded-xl font-medium transition-all duration-300 transform active:scale-95
-           bg-gradient-to-r from-primary/80 to-secondary/80 hover:from-primary hover:to-secondary
-           text-white shadow-lg shadow-primary/20 hover:shadow-primary/40;
+    @apply px-6 py-3 rounded-xl font-medium transition-all duration-300 transform active:scale-95 bg-gradient-to-r from-primary/80 to-secondary/80 hover:from-primary hover:to-secondary text-white shadow-lg shadow-primary/20 hover:shadow-primary/40;
   }
 
   .input-base {
-    @apply w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white
-           focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50
-           transition-all duration-300;
+    @apply w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all duration-300;
   }
 }
 
@@ -43,6 +39,30 @@
   @apply bg-transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+@apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+@keyframes scan {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-scan {
+  animation: scan 3s linear infinite;
+  box-shadow: 0 0 15px #3b82f6, 0 0 30px #8b5cf6;
 }

@@ -12,6 +12,16 @@ function App() {
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [highlightBox, setHighlightBox] = useState(null);
+
+  // Listen for Smart Overlay events from ResultsList
+  useEffect(() => {
+    const handleHighlight = (e) => setHighlightBox(e.detail);
+    window.addEventListener('highlight-box', handleHighlight);
+    return () => window.removeEventListener('highlight-box', handleHighlight);
+  }, []);
+
   // Check server health on mount
   useEffect(() => {
     const checkServer = async () => {
@@ -19,7 +29,6 @@ function App() {
         const res = await axios.get(`${apiUrl}/`);
         setServerStatus('online');
         if (res.data.engine) {
-          // Explicitly showing the user what model is running
           setActiveEngine(res.data.engine);
         }
       } catch (err) {
@@ -34,6 +43,8 @@ function App() {
   }, [apiUrl]);
 
   const handleFileSelected = async (file) => {
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
     setLoading(true);
     setError(null);
     setResults(null);
@@ -58,13 +69,18 @@ function App() {
     }
   };
 
-  return (
-    <div className="min-h-screen p-8 lg:p-12 relative">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <header className="mb-12 text-center animate-fade-in relative">
+  const clearFile = () => {
+    setPreviewUrl(null);
+    setResults(null);
+    setHighlightBox(null);
+  }
 
-          {/* Server Status Indicator */}
+  return (
+    <div className="min-h-screen p-8 lg:p-12 relative overflow-x-hidden">
+      <div className="max-w-6xl mx-auto z-10 relative">
+        {/* Header */}
+        <header className="mb-8 text-center animate-fade-in relative">
+
           <div className="absolute top-0 right-0 flex flex-col items-end space-y-2">
             <div className="flex items-center space-x-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
               <div className={`w-2 h-2 rounded-full ${serverStatus === 'online' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : serverStatus === 'offline' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`}></div>
@@ -73,18 +89,16 @@ function App() {
               </span>
             </div>
 
-            {/* Engine Badge - NOW LARGER AND EXPLICIT */}
             <div className={`mt-2 inline-flex items-center space-x-2 px-4 py-2 rounded-full border text-sm font-bold tracking-wide uppercase shadow-lg
-                  ${activeEngine.includes('Gemini')
-                ? 'bg-gradient-to-r from-purple-600 to-blue-600 border-purple-400 text-white'
-                : 'bg-gray-800 border-gray-600 text-gray-300'}`}>
+                  ${activeEngine.includes('Qwen')
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-400 text-white'
+                : activeEngine.includes('Gemini')
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 border-purple-400 text-white'
+                  : 'bg-gray-800 border-gray-600 text-gray-300'}`}>
               <span className="text-lg">
-                {activeEngine.includes('Gemini') ? '⚡' : '�'}
+                {activeEngine.includes('Qwen') ? '🧠' : activeEngine.includes('Gemini') ? '⚡' : ''}
               </span>
-              <span>
-                {/* If Gemini, explicitly say Flash if backend sends it, or just Gemini */}
-                {activeEngine || 'Unknown Engine'}
-              </span>
+              <span>{activeEngine}</span>
             </div>
           </div>
 
@@ -96,48 +110,101 @@ function App() {
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
             Extract dimensions, tolerances, and GD&T symbols from technical drawings using
-            <span className="text-purple-400 font-bold mx-1">Gemini Flash AI</span>
+            <span className="text-emerald-400 font-bold mx-1">Qwen 2.5 Vision</span>
             (or local OCR fallback).
           </p>
         </header>
 
         {/* Main Content Area */}
-        <div className="space-y-12">
-          {/* Upload Area */}
-          <div className={`transition-all duration-500 ${results ? 'scale-90 opacity-80 hover:scale-100 hover:opacity-100' : ''}`}>
-            <div className={serverStatus === 'offline' ? 'pointer-events-none opacity-50 grayscale' : ''}>
-              <UploadZone onFileSelected={handleFileSelected} />
-            </div>
-            {serverStatus === 'offline' && (
-              <p className="text-red-400 text-center mt-4 text-sm">Cannot upload: Backend server is unreachable.</p>
-            )}
-          </div>
+        <div className="space-y-8">
 
-          {/* Loading State */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-12 animate-fade-in">
-              <div className="relative w-24 h-24 mb-6">
-                {/* Flash Icon Animation */}
-                <div className="absolute inset-0 flex items-center justify-center text-4xl animate-pulse">
-                  ⚡
-                </div>
-                <div className="absolute inset-0 rounded-full border-4 border-white/10"></div>
-                <div className="absolute inset-0 rounded-full border-t-4 border-yellow-400 animate-spin"></div>
+          {/* 1. Upload Zone (Hidden if preview exists to save space, or minimized) */}
+          {!previewUrl && (
+            <div className="animate-fade-in">
+              <div className={serverStatus === 'offline' ? 'pointer-events-none opacity-50 grayscale' : ''}>
+                <UploadZone onFileSelected={handleFileSelected} />
               </div>
-              <p className="text-xl font-medium text-white animate-pulse">Processing with Gemini Flash...</p>
-              <p className="text-sm text-gray-500 mt-2">Extracting GD&T and Dimensions</p>
+              {serverStatus === 'offline' && <p className="text-red-400 text-center mt-4">Backend disconnected</p>}
             </div>
           )}
 
+          {/* 2. PREVIEW AREA + LASER SCAN + SMART OVERLAY */}
+          {previewUrl && (
+            <div className="relative animate-fade-in flex justify-center mb-8">
+              <div className="relative inline-block group rounded-lg overflow-hidden border border-white/10 shadow-2xl">
+
+                {/* Close/Clear Button */}
+                {!loading && (
+                  <button
+                    onClick={clearFile}
+                    className="absolute top-2 right-2 z-30 bg-black/50 hover:bg-red-500 text-white p-2 rounded-full backdrop-blur-md transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+                )}
+
+                {/* Main Image */}
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className={`block max-h-[600px] w-auto transition-opacity duration-1000 ${loading ? 'opacity-50' : 'opacity-100'}`}
+                />
+
+                {/* LASER SCANNING EFFECT (Only when loading) */}
+                {loading && (
+                  <div className="absolute inset-0 z-20 pointer-events-none">
+                    {/* The Moving Line */}
+                    <div className="absolute w-full h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan shadow-[0_0_20px_#34d399]"></div>
+
+                    {/* Grid Overlay */}
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+                    <div className="absolute inset-0 border-2 border-emerald-500/30 rounded-lg"></div>
+
+                    {/* Status Check Text */}
+                    <div className="absolute bottom-4 left-0 right-0 text-center">
+                      <span className="inline-block bg-black/70 backdrop-blur px-3 py-1 rounded text-emerald-400 font-mono text-sm animate-pulse border border-emerald-500/30">
+                        ACTIVATING VISION MATRIX...
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* SMART OVERLAY (Only when NOT loading) */}
+                {!loading && (
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    viewBox="0 0 1000 1000"
+                    preserveAspectRatio="none"
+                  >
+                    {highlightBox && (
+                      <rect
+                        x={highlightBox[1]} // xmin
+                        y={highlightBox[0]} // ymin
+                        width={highlightBox[3] - highlightBox[1]} // Width
+                        height={highlightBox[2] - highlightBox[0]} // Height
+                        fill="rgba(239, 68, 68, 0.15)"
+                        stroke="#ef4444"
+                        strokeWidth="3"
+                        vectorEffect="non-scaling-stroke"
+                        className="animate-pulse"
+                      />
+                    )}
+                  </svg>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Results Table */}
+          {results && <ResultsList data={results} />}
+
           {/* Error Message */}
           {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-center text-red-200 animate-fade-in font-mono text-sm break-all">
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-center text-red-200 animate-fade-in">
               {error}
             </div>
           )}
 
-          {/* Results */}
-          {results && <ResultsList data={results} />}
         </div>
       </div>
     </div>
