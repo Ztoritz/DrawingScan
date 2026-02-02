@@ -5,8 +5,8 @@ FROM python:3.10-slim
 # - poppler-utils: For pdf2image
 # - libgl1-mesa-glx: Required by OpenCV
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
     poppler-utils \
+    libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

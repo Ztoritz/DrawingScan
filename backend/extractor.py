@@ -14,17 +14,15 @@ except ImportError:
 
 def process_file(file_path):
     """
-    Main function to process a file (PDF or Image) and extract Drawing data.
+    Main function to process a file (PDF or Image) using EasyOCR (Deep Learning).
     """
+    import easyocr
     file_path = str(file_path).lower()
     
     if file_path.endswith('.pdf'):
         images = convert_from_path(file_path)
     else:
-        # Assume it's an image file supported by PIL/OpenCV
-        # We wrap it in a list to reuse the loop below
         try:
-            # Open with PIL first to verify/convert
             from PIL import Image
             pil_image = Image.open(file_path)
             images = [pil_image]
@@ -32,68 +30,53 @@ def process_file(file_path):
             print(f"Error opening image: {e}")
             return []
 
+    # Initialize EasyOCR Reader
+    # We load it here. In a prod app, you might load this once globally.
+    # gpu=False for compatibility with basic VPS (will use CPU)
+    reader = easyocr.Reader(['en'], gpu=False)
+
     all_extracted_data = []
 
     for i, image in enumerate(images):
-        open_cv_image = np.array(image) 
+        open_cv_image = np.array(image)
         
-        # Ensure BGR format for OpenCV
+        # Ensure BGR format for OpenCV/EasyOCR
         if len(open_cv_image.shape) == 3:
-             # Convert RGB to BGR if coming from PIL
-             # Note: pdf2image returns RGB, cv2 reads/writes BGR
+             # PIL is RGB, EasyOCR/OpenCV prefers BGR usually, 
+             # but EasyOCR actually handles RGB/BGR fine. Let's stick to standard OpenCV BGR.
             open_cv_image = open_cv_image[:, :, ::-1].copy() 
-            gray_original = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         elif len(open_cv_image.shape) == 2:
-            gray_original = open_cv_image
+             # Convert gray to BGR for consistency
+             open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_GRAY2BGR)
         else:
              open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGBA2BGR)
-             gray_original = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         
-        # --- STRATEGY 1: High Scaling + Adaptive (Good for small decimals) ---
-        gray_scaled = cv2.resize(gray_original, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-        # Sharpening
-        kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-        gray_scaled = cv2.filter2D(gray_scaled, -1, kernel)
+        # --- EasyOCR Execution ---
+        # detail=0 returns just the listing of text. 
+        # detail=1 returns [ [ [x,y]...], 'text', confidence ]
+        # We use detail=0 for simpler parsing first, or detail=1 if we want to filter by confidence
         
-        gray_adaptive = cv2.adaptiveThreshold(
-            gray_scaled, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 2
-        )
-
-        # --- STRATEGY 2: Moderate Scale + Simple Threshold (Good for clean, high contrast drawings) ---
-        # 2x scale often preserves geometry better than 3x for larger lines
-        gray_mod = cv2.resize(gray_original, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)
-        _, gray_binary = cv2.threshold(gray_mod, 180, 255, cv2.THRESH_BINARY)
+        # We pass the raw image. EasyOCR is robust enough to handle scaling internally.
+        # But we can still do a modest 2x upscale if results are tiny.
+        # Let's trust EasyOCR raw first as it's quite smart.
         
-        # --- STRATEGY 3: Raw (Good if thresholds destroy faint dim lines) ---
-        # Sometimes raw grayscale is best for Tesseract's internal binarization
+        # results = reader.readtext(open_cv_image, detail=0) 
+        # combined_text = "\n".join(results)
         
-        # Collect text from all strategies
+        # Let's get detailed results to filter low confidence garbage
+        results = reader.readtext(open_cv_image, detail=1)
+        
         combined_text = ""
-        
-        # Configs to run
-        configs = [
-            r'--oem 3 --psm 6',   # Block
-            r'--oem 3 --psm 11',  # Sparse
-        ]
-
-        # 1. Run on High Res Adaptive
-        for config in configs:
-            combined_text += "\n" + pytesseract.image_to_string(gray_adaptive, config=config)
-            
-        # 2. Run on Moderate Simple Binary
-        combined_text += "\n" + pytesseract.image_to_string(gray_binary, config=r'--oem 3 --psm 6')
-        
-        # 3. Run on Original (Raw)
-        combined_text += "\n" + pytesseract.image_to_string(gray_original, config=r'--oem 3 --psm 3')
+        for (bbox, text, prob) in results:
+            if prob > 0.3: # Filter really bad guesses
+                combined_text += "\n" + text
 
         extracted_items = extract_items_from_text(combined_text, i + 1)
         
-        # Deduplication (Crucial when running multiple strategies)
+        # Deduplication
         seen_values = set()
         unique_items = []
         for item in extracted_items:
-            # Create a unique signature
-            # We treat close values as identical? For now exact match.
             sig = f"{item['type']}-{item.get('value', '')}-{item.get('tolerance', '')}-{item.get('subtype', '')}"
             if sig not in seen_values:
                 seen_values.add(sig)
