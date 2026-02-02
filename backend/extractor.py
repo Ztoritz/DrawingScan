@@ -82,6 +82,21 @@ def process_file(file_path):
                  os.remove(target_path)
              
              if results:
+                 # --- ENRICHMENT STEP: ISO TOLERANCES ---
+                 from iso_fits import calculate_iso_limits
+                 
+                 for item in results:
+                     if item.get("type") == "Dimension" and item.get("subtype") in ["Diameter", "Linear"]:
+                         tol = item.get("tolerance", "")
+                         val = item.get("value", "0").replace("Ø", "").strip()
+                         
+                         # Check for ISO code patterns (e.g. H7, g6)
+                         # Simple heuristic: 1-2 letters check followed by number
+                         if tol and len(tol) <= 4 and tol[0].isalpha():
+                             limits = calculate_iso_limits(val, tol)
+                             if limits:
+                                 item["calculated_limits"] = limits  # Add new field
+                                 
                  return results
         except Exception as e:
             print(f"Qwen Error: {e}")

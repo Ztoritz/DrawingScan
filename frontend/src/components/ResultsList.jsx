@@ -80,11 +80,16 @@ const ResultsList = ({ data }) => {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                         {sortedData.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-white/5 transition-colors group">
+                            <tr
+                                key={idx}
+                                className="hover:bg-white/10 transition-colors group cursor-pointer"
+                                onMouseEnter={() => window.dispatchEvent(new CustomEvent('highlight-box', { detail: item.box_2d }))}
+                                onMouseLeave={() => window.dispatchEvent(new CustomEvent('highlight-box', { detail: null }))}
+                            >
                                 <td className="p-4">
                                     <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold border ${item.type === 'GD&T'
-                                            ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
-                                            : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                        : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                                         }`}>
                                         {item.type}
                                     </span>
@@ -104,12 +109,19 @@ const ResultsList = ({ data }) => {
                                             <b className="text-white">{item.datum || '-'}</b>
                                         </div>
                                     ) : (
-                                        <span className={`font-mono text-sm px-2 py-1 rounded ${item.tolerance === 'Basic'
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className={`font-mono text-sm px-2 py-1 rounded ${item.tolerance === 'Basic'
                                                 ? 'border border-white text-white'
                                                 : 'bg-white/10 text-gray-300'
-                                            }`}>
-                                            {item.tolerance}
-                                        </span>
+                                                }`}>
+                                                {item.tolerance}
+                                            </span>
+                                            {item.calculated_limits && (
+                                                <span className="text-[10px] text-emerald-400 font-mono tracking-tighter bg-emerald-500/10 px-1 rounded border border-emerald-500/20">
+                                                    {item.calculated_limits}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </td>
                                 <td className="p-4 text-right">

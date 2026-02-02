@@ -47,7 +47,8 @@ class QwenProcessor:
             "value": "The measured value (e.g. 20.0, Ø10, 1x45°)",
             "tolerance": "The tolerance string (e.g. ±0.1, H7, Basic)",
             "datum": "A (Only for GD&T)",
-            "original_text": "The raw text found"
+            "original_text": "The raw text found",
+            "box_2d": [ymin, xmin, ymax, xmax]  // Normalised 0-1000 based on image size
           }
         ]
         """
@@ -62,6 +63,7 @@ class QwenProcessor:
         Extract all dimensions and GD&T from this drawing.
         
         Critical Rules:
+        - EXTRACT BOUNDING BOXES for every single item using [ymin, xmin, ymax, xmax] format (0-1000 scale).
         - If you see a circle with crosshairs (⌖), it is Position.
         - If you see two concentric circles (◎), it is Concentricity.
         - If you see a simple arrow (↗), it is Runout.
