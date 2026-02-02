@@ -17,6 +17,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    # Initialize the OCR model on startup to avoid timeout on first request
+    extractor.init_reader()
+
 @app.get("/")
 def read_root():
     return {"message": "Scan-Drawing API is running"}

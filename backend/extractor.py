@@ -12,11 +12,31 @@ except ImportError:
 # NOTE: You might need to install poppler for pdf2image and tesseract-ocr executable for pytesseract
 # Windows users typically need to add them to PATH
 
+# Global reader instance
+reader = None
+
+def init_reader():
+    """
+    Initializes the EasyOCR reader. Should be called on app startup.
+    This downloads the models if not present and loads them into memory.
+    """
+    global reader
+    if reader is None:
+        import easyocr
+        print("Initializing EasyOCR... (This may take a moment)")
+        # gpu=False for compatibility with basic VPS
+        reader = easyocr.Reader(['en'], gpu=False)
+        print("EasyOCR Initialized.")
+
 def process_file(file_path):
     """
     Main function to process a file (PDF or Image) using EasyOCR (Deep Learning).
     """
-    import easyocr
+    # Ensure reader is loaded if process_file is called without init (e.g. testing)
+    global reader
+    if reader is None:
+        init_reader()
+
     file_path = str(file_path).lower()
     
     if file_path.endswith('.pdf'):
@@ -29,11 +49,6 @@ def process_file(file_path):
         except Exception as e:
             print(f"Error opening image: {e}")
             return []
-
-    # Initialize EasyOCR Reader
-    # We load it here. In a prod app, you might load this once globally.
-    # gpu=False for compatibility with basic VPS (will use CPU)
-    reader = easyocr.Reader(['en'], gpu=False)
 
     all_extracted_data = []
 
