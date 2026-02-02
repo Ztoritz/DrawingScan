@@ -107,18 +107,37 @@ def process_file(file_path):
 
         extracted_items = extract_items_from_text(combined_text, i + 1)
         
-        # Deduplication
-        seen_values = set()
-        unique_items = []
-        for item in extracted_items:
-            sig = f"{item['type']}-{item.get('value', '')}-{item.get('tolerance', '')}-{item.get('subtype', '')}"
-            if sig not in seen_values:
-                seen_values.add(sig)
-                unique_items.append(item)
-                
-        all_extracted_data.extend(unique_items)
+    # --- Deduplication ---
+    # Deduplicate based on distinct content signature
+    seen_values = set()
+    unique_items = []
+    
+    # Debug: Print raw text to help diagnose what EasyOCR actually saw
+    print(f"--- Raw Text Page {i+1} ---")
+    print(combined_text)
+    print("-------------------------")
+
+    for item in extracted_items:
+        sig = f"{item['type']}-{item.get('value', '')}-{item.get('tolerance', '')}-{item.get('subtype', '')}"
+        if sig not in seen_values:
+            seen_values.add(sig)
+            unique_items.append(item)
+            
+    all_extracted_data.extend(unique_items)
 
     return all_extracted_data
+
+def clean_ocr_text(line):
+    """
+    Normalizes common OCR errors for engineering symbols.
+    """
+    # Fix Diameter symbols
+    line = re.sub(r'(?<![A-Za-z])(?:Q|O|o)(?=\d)', 'Ø', line) # Q10 -> Ø10
+    
+    # Fix Plus/Minus errors
+    line = line.replace('t/', '+/-').replace('I-', '+/-')
+    
+    return line
 
 def extract_items_from_text(text, page_number):
     items = []
@@ -129,21 +148,54 @@ def extract_items_from_text(text, page_number):
         if not line:
             continue
             
-        # --- 1. Dimensions with Tolerances (Strict) ---
-        # Matches: 50.0 +/- 0.1, 12,5 ±0,1
-        # Supports both dot and comma decimals
+        # Pre-clean the line
+        line = clean_ocr_text(line)
+        
+        # --- 1. Dimensions with Tolerances ---
+        # Matches: 50.0 +/- 0.1, 12,5 ±0,1, 10+0,2 (loose)
+        # We need to be very aggressive here.
+        
+        # 1a. Explicit Symbols (±, +/-)
         dim_tol_pattern = r"([Øø]?\s*\d+[.,]?\d*)\s*(?:±|\+\/-)\s*(\d+[.,]?\d*)"
         matches = re.findall(dim_tol_pattern, line)
         for m in matches:
             items.append({
                 "type": "Dimension",
-                "value": m[0].replace(' ', ''), # Clean up spaces in "Ø 50"
+                "value": m[0].replace(' ', ''),
                 "tolerance": f"±{m[1]}",
                 "original_text": line,
                 "page": page_number
             })
+            
+        # 1b. Loose Tolerance (e.g. 10+0.1 or 10-0.1 which might be asymmetric or just a misread ±)
+        # This is risky but needed if OCR sees "10 + 0,2" instead of "10 ± 0,2"
+        # We only match if the second number is small (< half the first) to avoid math sums
+        loose_tol_pattern = r"([Øø]?\s*\d+[.,]?\d*)\s*[\+]\s*(\d+[.,]?\d*)"
+        matches_loose_tol = re.findall(loose_tol_pattern, line)
+        for m in matches_loose_tol:
+             items.append({
+                "type": "Dimension",
+                "subtype": "Loose Match",
+                "value": m[0].replace(' ', ''),
+                "tolerance": f"±{m[1]} (Assumed)",
+                "original_text": line,
+                "page": page_number
+            })
 
-        # --- 2. Limits / Fit Tolerances ---
+        # --- 2. Basic Dimensions (Boxed or Parentheses) ---
+        # Matches: (12), [50.5]
+        basic_dim_pattern = r"[\(\[\{]\s*(\d+[.,]?\d*)\s*[\)\]\}]"
+        matches_basic = re.findall(basic_dim_pattern, line)
+        for m in matches_basic:
+             items.append({
+                "type": "Dimension (Basic)",
+                "value": m,
+                "tolerance": "Basic",
+                "original_text": line,
+                "page": page_number
+            })
+
+        # --- 3. Limits / Fit Tolerances ---
         # Matches: 50 H7, 40 g6
         fit_pattern = r"(\d+[.,]?\d*)\s*([HhGgJsEef]\d+)"
         matches_fit = re.findall(fit_pattern, line)
@@ -156,92 +208,48 @@ def extract_items_from_text(text, page_number):
                 "page": page_number
             })
 
-        # --- 3. Standalone Precision Dimensions (Loose) ---
-        # Matches numbers that look like precise dimensions (e.g. 50.00, 12.5) 
-        # but don't have explicit tolerances next to them.
+        # --- 4. Standalone Dimensions ---
+        # Only if NOT already matched as tolerance or basic
+        if not matches and not matches_loose_tol and not matches_basic:
+            
+            # High Precision (3+ decimals) or Diameter
+            high_prec_pattern = r"(?<!\d)([Øø]?\s*\d+[.,]\d{1,4})(?!\d)"
+            matches_high = re.findall(high_prec_pattern, line)
+            
+            for m in matches_high:
+                 val_clean = m.replace(' ', '').replace(',', '.')
+                 
+                 subtype = "Linear"
+                 if 'Ø' in val_clean or 'ø' in val_clean:
+                     subtype = "Diameter"
+                     val_clean = val_clean.replace('Ø', '').replace('ø', '')
 
-        # 3a. High Precision / Imperial (e.g., 4.0000, 1.5000) - CALIBRATED FROM SAMPLE
-        # We look for 3 or 4 decimal places explicitly, which is a strong signal of a dimension.
-        # Also handles fuzzy Diameter symbol (O, Q, 0) if followed by high precision number.
-        high_prec_pattern = r"(?<!\d)([ØøOQ0o]?\s*\d+[.,]\d{3,4})(?!\d)"
-        matches_high_prec = re.findall(high_prec_pattern, line)
-        for m in matches_high_prec:
-             val_clean = m.replace(' ', '').replace(',', '.')
-             
-             # Check if it looks like a diameter
-             subtype = "Linear"
-             if val_clean[0] in 'ØøOQ0o':
-                 subtype = "Diameter"
-                 # Strip the symbol for the value field
-                 val_clean = re.sub(r'[ØøOQ0o]', '', val_clean)
-
-             items.append({
-                "type": "Dimension",
-                "subtype": subtype,
-                "value": val_clean,
-                "tolerance": "Basic", # No explicit tolerance listed
-                "original_text": line,
-                "page": page_number
-            })
-
-        # 3b. Standard Precision (e.g. 12.5) - Lower confidence
-        # Only if we didn't just match it as high precision (simple logic: avoid duplicates later)
-        if not matches_high_prec:
-            loose_dim_pattern = r"(?<!\d)([Øø]?\s*\d+[.,]\d{1,2})(?!\d)(?!\s*(?:±|\+\/-))"
-            matches_loose = re.findall(loose_dim_pattern, line)
-            for m in matches_loose:
-                 # heuristic: Ignore small integers like 1.0 or 2.0 unless they have a diameter symbol, 
-                 # as they might be typical text/numbering.
-                 # But valid for 12.5
-                 val = m.replace(' ', '')
                  items.append({
-                    "type": "Dimension (Basic)",
-                    "value": val,
+                    "type": "Dimension",
+                    "subtype": subtype,
+                    "value": val_clean,
                     "tolerance": "General",
                     "original_text": line,
                     "page": page_number
                 })
 
-        # --- 4. Geometric Tolerance (GD&T) ---
-        # Searching for keywords often found in control frames or notes
+        # --- 5. GD&T Symbols ---
         gdt_keywords = {
             "⏊": "Perpendicularity",
             "//": "Parallelism",
             "⌖": "Position",
             "O": "Cylindricity", 
             "◎": "Concentricity",
-            "Ø": "Diameter Symbol" 
         }
         
-        # Also check for standard text representations folks use if symbols fail
-        gdt_text_map = {
-            "PERPENDICULAR": "Perpendicularity",
-            "PARALLEL": "Parallelism",
-            "FLATNESS": "Flatness",
-            "POSITION": "Position"
-        }
-
         for symbol, name in gdt_keywords.items():
             if symbol in line:
                  items.append({
                     "type": "GD&T",
                     "subtype": name,
-                    "value": "Symbol found", # extracting exact value is hard without spatial analysis
+                    "value": "Symbol found",
                     "original_text": line,
                     "page": page_number
                 })
-
-        for key, name in gdt_text_map.items():
-            if key in line.upper():
-                 items.append({
-                    "type": "GD&T",
-                    "subtype": name,
-                    "value": "Text Annotation", 
-                    "original_text": line,
-                    "page": page_number
-                })
-
-    # Deduplicate based on original_text to avoid noise
-    # (Optional refinement step)
     
     return items
