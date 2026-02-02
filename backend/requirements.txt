@@ -2,8 +2,6 @@ fastapi
 uvicorn
 python-multipart
 pdf2image
-easyocr
-opencv-python-headless
 numpy
 Pillow
 google-generativeai

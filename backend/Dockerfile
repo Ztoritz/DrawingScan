@@ -16,6 +16,11 @@ COPY requirements.txt .
 # CRITICAL: Install CPU-only PyTorch to avoid massive CUDA download (OOM fix)
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
+# Install Heavy Libraries Separately (Caching & OOM Prevention)
+RUN pip install --no-cache-dir opencv-python-headless
+RUN pip install --no-cache-dir easyocr
+
+# Install remaining dependencies from file
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
