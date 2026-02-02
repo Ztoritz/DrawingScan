@@ -39,7 +39,8 @@
   @apply bg-transparent;
 }
 
-@apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
 }
 
 @keyframes scan {
