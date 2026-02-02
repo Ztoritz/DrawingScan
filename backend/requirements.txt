@@ -4,5 +4,6 @@ python-multipart
 pdf2image
 # pytesseract - Removed in favor of EasyOCR
 easyocr
+opencv-python-headless
 numpy
 Pillow
