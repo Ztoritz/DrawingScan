@@ -1,13 +1,7 @@
 import re
-try:
-    from pdf2image import convert_from_path
-    import pytesseract
-    import cv2
-    import numpy as np
-except ImportError:
-    # Fallback/Mock for environment where dependnecies aren't fully installed yet
-    # This helps prevents crashes during initial file creation if the user inspects code
-    pass
+from pdf2image import convert_from_path
+import cv2
+import numpy as np
 
 # NOTE: You might need to install poppler for pdf2image and tesseract-ocr executable for pytesseract
 # Windows users typically need to add them to PATH
