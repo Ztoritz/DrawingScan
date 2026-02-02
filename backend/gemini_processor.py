@@ -86,6 +86,15 @@ class GeminiProcessor:
         Input: A number "50" inside a rectangle: "[50]"
         Output: { "type": "Dimension", "subtype": "Basic", "value": "50", "tolerance": "Basic", "original_text": "[50]" }
 
+        Example 5 (Complex Lathe Part - Real World):
+        Input: A drawing with "Ø10 H7 (+0,015)", a runout frame "[ ↗ | 0,02 | B ]", and chamfer "1x45°"
+        Output: [
+          { "type": "Dimension", "subtype": "Diameter", "value": "10", "tolerance": "H7 (+0.015)", "original_text": "Ø10 H7 (+0,015)" },
+          { "type": "GD&T", "subtype": "Runout", "value": "0.02", "datum": "B", "original_text": "[↗|0,02|B]" },
+          { "type": "Dimension", "subtype": "Chamfer", "value": "1x45°", "tolerance": "General", "original_text": "1x45°" },
+          { "type": "Dimension", "subtype": "Linear", "value": "76", "tolerance": "±0.1", "original_text": "76±0,1" }
+        ]
+
         *** END TRAINING ***
         
         Analyze the image and Return ONLY a JSON Array.
