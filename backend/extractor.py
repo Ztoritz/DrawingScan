@@ -79,7 +79,7 @@ def get_active_engine():
     """Returns the name of the currently active engine."""
     global gemini_client
     if gemini_client:
-        return "Gemini 2.0 Flash (Cloud)"
+        return "Gemini Flash 2.0 (Cloud)"
     return "EasyOCR (Local)"
 
 def process_file(file_path):
