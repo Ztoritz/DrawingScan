@@ -8,6 +8,10 @@ import tempfile
 import models
 from database import engine
 from routers import auth
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Create DB Tables
 models.Base.metadata.create_all(bind=engine)
