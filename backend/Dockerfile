@@ -17,17 +17,10 @@ WORKDIR /app
 # Install Python dependencies
 COPY requirements.txt .
 
-# CRITICAL: Upgrade pip first
+# Upgrade pip
 RUN pip install --upgrade pip
 
-# CRITICAL: Install CPU-only PyTorch (Pinned Version) with Timeout
-RUN pip install --no-cache-dir --default-timeout=1000 torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# Install Heavy Libraries Separately (Caching & OOM Prevention)
-RUN pip install --no-cache-dir --default-timeout=1000 opencv-python-headless
-RUN pip install --no-cache-dir --default-timeout=1000 easyocr
-
-# Install remaining dependencies from file
+# Install dependencies (Lite version: No Torch/EasyOCR)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

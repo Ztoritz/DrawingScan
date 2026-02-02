@@ -51,10 +51,15 @@ def init_reader():
     
     # Always load EasyOCR as fallback
     if reader is None:
-        import easyocr
-        print("Initializing EasyOCR (Fallback/Local)...")
-        reader = easyocr.Reader(['en'], gpu=False)
-        print("EasyOCR Initialized.")
+        try:
+            import easyocr
+            print("Initializing EasyOCR (Fallback/Local)...")
+            reader = easyocr.Reader(['en'], gpu=False)
+            print("EasyOCR Initialized.")
+        except ImportError:
+            print("⚠️ EasyOCR not installed. Local fallback disabled to save build size.")
+            if not init_error:
+                init_error = "No Cloud Keys & No Local OCR"
 
 def get_active_engine():
     """Returns the name of the currently active engine."""
