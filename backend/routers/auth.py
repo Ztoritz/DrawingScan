@@ -37,12 +37,16 @@ async def register(user: schemas.UserCreate, request: Request, db: Session = Dep
 
     # 3. Send Admin Email
     # Construct approval link. 
-    # In production, this should be the frontend URL or a direct API backend link.
-    # We use a direct API link for simplicity of the "Pipe" workflow requested.
     base_url = str(request.base_url).rstrip("/")
     approval_link = f"{base_url}/auth/approve?email={new_user.email}&secret={os.environ.get('SECRET_KEY')}"
     
-    await email_utils.send_approval_request(new_user.email, approval_link)
+    try:
+        await email_utils.send_approval_request(new_user.email, approval_link)
+    except Exception as e:
+        print(f"FAILED TO SEND EMAIL: {e}")
+        # We do NOT raise an HTTP exception here, because the user is already created.
+        # We just log it. The user will see "Application Received" but admin won't get email.
+        # In a real app, we might want to return a warning.
 
     return new_user
 
