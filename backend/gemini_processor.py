@@ -10,8 +10,8 @@ class GeminiProcessor:
             raise ValueError("API Key is required for Gemini Processor")
         genai.configure(api_key=api_key)
         # Use the flash model for speed and cost, or pro-vision for max intelligence
-        # gemini-1.5-flash is excellent for this and cheaper/faster
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Switching to gemini-flash-latest for stability/quota availability
+        self.model = genai.GenerativeModel('gemini-flash-latest')
         self.training_dir = Path("backend/training_data")
         self.training_dir.mkdir(parents=True, exist_ok=True)
 
