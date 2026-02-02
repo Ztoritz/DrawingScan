@@ -54,12 +54,25 @@ class GeminiProcessor:
         2. **Distinguish Ø from 0**: 
            - If a number is `010`, it is likely `Ø10`. 
            - Look for value `Ø` (Diameter) vs `R` (Radius) vs `M` (Metric).
-        3. **GD&T Frames**:
-           - Look for `[Symbol | Value | Datum]`.
-           - Locate Feature Control Frames attached to dimensions.
-           - Extract the full content (e.g. Position 0.15 relative to A and B).
+        3. **GD&T Feature Control Frames**:
+           - **Structure**: A rectangular box divided into cells: `[ Symbol | Tolerance | Datum(s) ]`.
+           - **Example in Drawing**: `[ ◎ | Ø0.1 | A ]` (Concentricity of 0.1 relative to Datum A).
+           - **Action**: Extract these fully.
+             - Type: "GD&T"
+             - Subtype: "Concentricity" (or Position/Perpendicularity based on symbol)
+             - Value: "Ø0.1" (Include the diameter symbol if inside the frame)
+             - Datum: "A"
         4. **Tolerances**:
            - Capture `±`, `+`, `-`, or limit codes (H7, etc).
+           
+        *** TRAINING EXAMPLE ***
+        Input: A shaft drawing with "Ø20±0,15" and a frame "[ ◎ | Ø0.1 | A ]" below it.
+        Output JSON:
+        [
+          { "type": "Dimension", "subtype": "Diameter", "value": "20", "tolerance": "±0.15", "original_text": "Ø20±0,15" },
+          { "type": "GD&T", "subtype": "Concentricity", "value": "Ø0.1", "datum": "A", "original_text": "[◎|Ø0.1|A]" }
+        ]
+        *** END TRAINING ***
         
         Extract all:
         - Linear Dimensions
