@@ -83,19 +83,26 @@ def process_file(file_path):
              
              if results:
                  # --- ENRICHMENT STEP: ISO TOLERANCES ---
-                 from iso_fits import calculate_iso_limits
-                 
-                 for item in results:
-                     if item.get("type") == "Dimension" and item.get("subtype") in ["Diameter", "Linear"]:
-                         tol = item.get("tolerance", "")
-                         val = item.get("value", "0").replace("Ø", "").strip()
-                         
-                         # Check for ISO code patterns (e.g. H7, g6)
-                         # Simple heuristic: 1-2 letters check followed by number
-                         if tol and len(tol) <= 4 and tol[0].isalpha():
-                             limits = calculate_iso_limits(val, tol)
-                             if limits:
-                                 item["calculated_limits"] = limits  # Add new field
+                 try:
+                     # Lazy import to avoid circular dep issues during startup if any
+                     from iso_fits import calculate_iso_limits
+                     
+                     for item in results:
+                         # Only enrich Dimensions (Linear/Diameter)
+                         if item.get("type") == "Dimension" and item.get("subtype") in ["Diameter", "Linear", "Basic"]:
+                             tol = item.get("tolerance", "")
+                             val = str(item.get("value", "0")).replace("Ø", "").strip()
+                             
+                             # Check for ISO code patterns (e.g. H7, g6, f7)
+                             # Heuristic: Starts with letter, length <= 4
+                             if tol and len(tol) <= 5 and tol[0].isalpha():
+                                 limits = calculate_iso_limits(val, tol)
+                                 if limits:
+                                     item["calculated_limits"] = limits  # Add new field
+                 except ImportError:
+                     print("⚠️ ISO Fits library not found. Skipping enrichment.")
+                 except Exception as e:
+                     print(f"⚠️ ISO Enrichment Failed: {e}")
                                  
                  return results
         except Exception as e:
