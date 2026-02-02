@@ -137,19 +137,48 @@ def extract_items_from_text(text, page_number):
         # --- 3. Standalone Precision Dimensions (Loose) ---
         # Matches numbers that look like precise dimensions (e.g. 50.00, 12.5) 
         # but don't have explicit tolerances next to them.
-        # We ensure they have at least one decimal place to avoid picking up page numbers or counts.
-        loose_dim_pattern = r"(?<!\d)([Øø]?\s*\d+[.,]\d+)(?!\d)(?!\s*(?:±|\+\/-))"
-        matches_loose = re.findall(loose_dim_pattern, line)
-        for m in matches_loose:
-             # Filter out common false positives if necessary (like dates)
-             val = m.replace(' ', '')
+
+        # 3a. High Precision / Imperial (e.g., 4.0000, 1.5000) - CALIBRATED FROM SAMPLE
+        # We look for 3 or 4 decimal places explicitly, which is a strong signal of a dimension.
+        # Also handles fuzzy Diameter symbol (O, Q, 0) if followed by high precision number.
+        high_prec_pattern = r"(?<!\d)([ØøOQ0o]?\s*\d+[.,]\d{3,4})(?!\d)"
+        matches_high_prec = re.findall(high_prec_pattern, line)
+        for m in matches_high_prec:
+             val_clean = m.replace(' ', '').replace(',', '.')
+             
+             # Check if it looks like a diameter
+             subtype = "Linear"
+             if val_clean[0] in 'ØøOQ0o':
+                 subtype = "Diameter"
+                 # Strip the symbol for the value field
+                 val_clean = re.sub(r'[ØøOQ0o]', '', val_clean)
+
              items.append({
-                "type": "Dimension (Basic)",
-                "value": val,
-                "tolerance": "General",
+                "type": "Dimension",
+                "subtype": subtype,
+                "value": val_clean,
+                "tolerance": "Basic", # No explicit tolerance listed
                 "original_text": line,
                 "page": page_number
             })
+
+        # 3b. Standard Precision (e.g. 12.5) - Lower confidence
+        # Only if we didn't just match it as high precision (simple logic: avoid duplicates later)
+        if not matches_high_prec:
+            loose_dim_pattern = r"(?<!\d)([Øø]?\s*\d+[.,]\d{1,2})(?!\d)(?!\s*(?:±|\+\/-))"
+            matches_loose = re.findall(loose_dim_pattern, line)
+            for m in matches_loose:
+                 # heuristic: Ignore small integers like 1.0 or 2.0 unless they have a diameter symbol, 
+                 # as they might be typical text/numbering.
+                 # But valid for 12.5
+                 val = m.replace(' ', '')
+                 items.append({
+                    "type": "Dimension (Basic)",
+                    "value": val,
+                    "tolerance": "General",
+                    "original_text": line,
+                    "page": page_number
+                })
 
         # --- 4. Geometric Tolerance (GD&T) ---
         # Searching for keywords often found in control frames or notes
