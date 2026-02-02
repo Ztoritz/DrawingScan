@@ -1,11 +1,15 @@
 FROM python:3.10-slim
 
 # Install system dependencies
-# poppler-utils for pdf2image, libgl1 for opencv
+# poppler-utils for pdf2image
+# opencv dependencies: libgl1, libglib2.0-0, libsm6, libxext6, librender1
 RUN apt-get update && apt-get install -y \
     poppler-utils \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    librender1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
