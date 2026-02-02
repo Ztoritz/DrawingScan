@@ -107,41 +107,59 @@ def extract_items_from_text(text, page_number):
         if not line:
             continue
             
-        # --- 1. Dimensions with Tolerances ---
-        # Pattern ideas: 
-        # 50.0 +/- 0.1
-        # 50.0 +0.1/-0.2
-        # 50 +/-0.1
-        # H7, g6 (Fit tolerances)
-        
-        # Regex for Basic Linear Dimension + Tolerance
-        # Matches: 12.5 +/-0.1, 15 ± 0.05
-        dim_tol_pattern = r"(\d+\.?\d*)\s*(?:±|\+\/-)\s*(\d+\.?\d*)"
+        # --- 1. Dimensions with Tolerances (Strict) ---
+        # Matches: 50.0 +/- 0.1, 12,5 ±0,1
+        # Supports both dot and comma decimals
+        dim_tol_pattern = r"([Øø]?\s*\d+[.,]?\d*)\s*(?:±|\+\/-)\s*(\d+[.,]?\d*)"
         matches = re.findall(dim_tol_pattern, line)
         for m in matches:
             items.append({
                 "type": "Dimension",
-                "value": m[0],
+                "value": m[0].replace(' ', ''), # Clean up spaces in "Ø 50"
                 "tolerance": f"±{m[1]}",
                 "original_text": line,
                 "page": page_number
             })
-            
-        # Regex for Upper/Lower limits
-        # Matches: 12.5 +0.1 -0.2 (simplified)
-        # hard to capture nicely in single line regex without getting messy, 
-        # but let's try a simple one for space separated formatted text
-        # Assumes text comes out linear like "50 +0.1 -0.1" which isn't always true in OCR
-        
-        # --- 2. Geometric Tolerance (GD&T) ---
+
+        # --- 2. Limits / Fit Tolerances ---
+        # Matches: 50 H7, 40 g6
+        fit_pattern = r"(\d+[.,]?\d*)\s*([HhGgJsEef]\d+)"
+        matches_fit = re.findall(fit_pattern, line)
+        for m in matches_fit:
+            items.append({
+                "type": "Dimension (Fit)",
+                "value": m[0],
+                "tolerance": m[1],
+                "original_text": line,
+                "page": page_number
+            })
+
+        # --- 3. Standalone Precision Dimensions (Loose) ---
+        # Matches numbers that look like precise dimensions (e.g. 50.00, 12.5) 
+        # but don't have explicit tolerances next to them.
+        # We ensure they have at least one decimal place to avoid picking up page numbers or counts.
+        loose_dim_pattern = r"(?<!\d)([Øø]?\s*\d+[.,]\d+)(?!\d)(?!\s*(?:±|\+\/-))"
+        matches_loose = re.findall(loose_dim_pattern, line)
+        for m in matches_loose:
+             # Filter out common false positives if necessary (like dates)
+             val = m.replace(' ', '')
+             items.append({
+                "type": "Dimension (Basic)",
+                "value": val,
+                "tolerance": "General",
+                "original_text": line,
+                "page": page_number
+            })
+
+        # --- 4. Geometric Tolerance (GD&T) ---
         # Searching for keywords often found in control frames or notes
-        # Parallelism, Perpendicularity, Flatness, Position
         gdt_keywords = {
             "⏊": "Perpendicularity",
             "//": "Parallelism",
             "⌖": "Position",
-            "O": "Cylindricity", # OCR might read circle symbol as O
-            "◎": "Concentricity"
+            "O": "Cylindricity", 
+            "◎": "Concentricity",
+            "Ø": "Diameter Symbol" 
         }
         
         # Also check for standard text representations folks use if symbols fail
