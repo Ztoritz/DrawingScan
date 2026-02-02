@@ -5,44 +5,88 @@ import numpy as np
 import os
 
 # --- CLOUD AI INTEGRATION ---
-try:
-    from gemini_processor import GeminiProcessor
-except ImportError:
-    GeminiProcessor = None
-
-# Global reader instances
-reader = None
 gemini_client = None
+qwen_client = None
+reader = None
 
 def init_reader():
     """
     Initializes OCR engines. Checks for API keys to determine mode.
     """
-    global reader, gemini_client
+    global reader, gemini_client, qwen_client
     
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
+    # Check Qwen First (User Preference)
+    qwen_key = os.environ.get("QWEN_API_KEY")
+    if qwen_key:
+        try:
+            from qwen_processor import QwenProcessor
+            base_url = os.environ.get("QWEN_BASE_URL")
+            model = os.environ.get("QWEN_MODEL", "qwen/qwen-2.5-vl-72b-instruct") # Default to OpenRouter formatted model
+            print(f"🚀 Initializing Qwen 2.5... (Model: {model})")
+            qwen_client = QwenProcessor(api_key=qwen_key, base_url=base_url, model=model)
+            print("✅ Qwen 2.5 Connected.")
+        except Exception as e:
+            print(f"⚠️ Failed to connect to Qwen: {e}")
+
+    # Check Gemini Second
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if gemini_key and not qwen_client: # Only load if Qwen isn't active (save resources) or allow fallback? 
+        # For now, exclusivity: If Qwen is set, use Qwen.
         print("🚀 Gemini AI Detected. Initializing Cloud Engine...")
         try:
-            gemini_client = GeminiProcessor(api_key)
-            print("✅ Gemini Pro Connected.")
+             from gemini_processor import GeminiProcessor
+             gemini_client = GeminiProcessor(gemini_key)
+             print("✅ Gemini Pro Connected.")
         except Exception as e:
             print(f"⚠️ Failed to connect to Gemini: {e}")
     
-    # Always load EasyOCR as fallback or for hybrid use
+    # Always load EasyOCR as fallback
     if reader is None:
         import easyocr
         print("Initializing EasyOCR (Fallback/Local)...")
         reader = easyocr.Reader(['en'], gpu=False)
         print("EasyOCR Initialized.")
 
+def get_active_engine():
+    """Returns the name of the currently active engine."""
+    global qwen_client, gemini_client
+    if qwen_client:
+        # parsed_model = qwen_client.model.split('/')[-1] # Simplification
+        return f"Qwen 2.5 VL (Cloud)"
+    if gemini_client:
+        return "Gemini Flash 2.0 (Cloud)"
+    return "EasyOCR (Local)"
+
 def process_file(file_path):
     # Ensure init
-    global reader, gemini_client
-    if reader is None and gemini_client is None:
+    global reader, gemini_client, qwen_client
+    if reader is None and gemini_client is None and qwen_client is None:
         init_reader()
 
-    # --- PRIORITY: CLOUD AI (GEMINI) ---
+    # --- PRIORITY 1: QWEN 2.5 (Vision) ---
+    if qwen_client:
+        print("🧠 Processing with Qwen 2.5 VL...")
+        try:
+             # Handle PDFs by converting to image first
+             target_path = file_path
+             if str(file_path).lower().endswith('.pdf'):
+                images = convert_from_path(file_path)
+                if images:
+                    target_path = file_path + "_temp.png"
+                    images[0].save(target_path)
+            
+             results = qwen_client.extract_data(target_path)
+             
+             # Cleanup
+             if target_path != file_path and os.path.exists(target_path):
+                 os.remove(target_path)
+             
+             if results:
+                 return results
+        except Exception as e:
+            print(f"Qwen Error: {e}")
+
+    # --- PRIORITY 2: CLOUD AI (GEMINI) ---
     if gemini_client:
         print("🧠 Processing with Gemini Pro...")
         try:
