@@ -24,7 +24,10 @@ async def startup_event():
 
 @app.get("/")
 def read_root():
-    return {"message": "Scan-Drawing API is running"}
+    return {
+        "message": "Scan-Drawing API is running",
+        "engine": extractor.get_active_engine()
+    }
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):

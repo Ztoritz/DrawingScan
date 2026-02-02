@@ -75,9 +75,16 @@ def process_file(file_path):
     # --- FALLBACK: LOCAL EASYOCR ---
     print("👀 Processing with Local EasyOCR...")
 
-    """
-    Main function to process a file (PDF or Image) using EasyOCR (Deep Learning).
-    """
+def get_active_engine():
+    """Returns the name of the currently active engine."""
+    global gemini_client
+    if gemini_client:
+        return "Gemini 2.0 Flash (Cloud)"
+    return "EasyOCR (Local)"
+
+def process_file(file_path):
+    # Ensure init
+    global reader, gemini_client
     # Ensure reader is loaded if process_file is called without init (e.g. testing)
     global reader
     if reader is None:
