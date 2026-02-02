@@ -60,30 +60,45 @@ def process_file(file_path):
              open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGBA2BGR)
              gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
 
-        # --- SAFETY OPTIMIZATION ---
-        # If image is too large, EasyOCR will OOM or Timeout.
-        # Limit max dimension to 2000px (sufficient for technical drawings).
+        # --- SMART IMAGE NORMALIZATION ---
+        # Handle "different sizes" (scaling up small ones, capping large ones)
         height, width = gray.shape[:2]
-        max_dim = 2000
-        if width > max_dim or height > max_dim:
-            scaling_factor = max_dim / float(max(width, height))
-            gray = cv2.resize(gray, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
+        long_side = max(height, width)
+        
+        target_min = 1500
+        target_max = 3072 # Increased from 2000 to allow more detail
+        
+        if long_side < target_min:
+            # Upscale small images to at least 1500px
+            scale = target_min / long_side
+            gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        elif long_side > target_max:
+            # Downscale massive images to avoid OOM
+            scale = target_max / long_side
+            gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+
+        # --- CONTRAST ENHANCEMENT (CLAHE) ---
+        # "Adjust" for difficult drawings. This brings out faint text.
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        gray = clahe.apply(gray)
 
         # --- EasyOCR Execution ---
-        # Pass the processed grayscale safety image
-        # detail=1 returns [ [ [x,y]...], 'text', confidence ]
-        # We use detail=0 for simpler parsing first, or detail=1 if we want to filter by confidence
-        
-        # We pass the raw image. EasyOCR is robust enough to handle scaling internally.
-        # But we can still do a modest 2x upscale if results are tiny.
-        # Let's trust EasyOCR raw first as it's quite smart.
-        
-        # results = reader.readtext(open_cv_image, detail=0) 
-        # combined_text = "\n".join(results)
-        
-        # Let's get detailed results to filter low confidence garbage
-        # Run on the optimized grayscale image
-        results = reader.readtext(gray, detail=1)
+        # Tuned parameters for Engineering Drawings:
+        # text_threshold=0.6 (default 0.7) -> Find fainter text
+        # link_threshold=0.4 (default 0.4)
+        # low_text=0.35 (default 0.4) -> Keep lower confidence text
+        # width_ths=0.7 (Merge separate characters closer together)
+        try:
+            results = reader.readtext(
+                gray, 
+                detail=1,
+                text_threshold=0.6,
+                low_text=0.35,
+                width_ths=0.7 
+            )
+        except Exception as e:
+            print(f"OCR Error on page {i+1}: {e}")
+            continue
         
         combined_text = ""
         for (bbox, text, prob) in results:
