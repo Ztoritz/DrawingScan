@@ -1,7 +1,24 @@
 import React from 'react';
 
 const ResultsList = ({ data }) => {
-    if (!data || data.length === 0) return null;
+    if (!data) return null;
+
+    if (data.length === 0) {
+        return (
+            <div className="w-full text-center p-8 glass-panel animate-slide-up mt-8">
+                <div className="inline-block p-4 rounded-full bg-white/5 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">No Features Detected</h3>
+                <p className="text-gray-400 max-w-md mx-auto">
+                    We processed the file but couldn't identify any dimensions or GD&T symbols.
+                    <br /><span className="text-sm opacity-60">Try uploading a higher quality PDF or Image.</span>
+                </p>
+            </div>
+        );
+    }
 
     const dimensions = data.filter(item => item.type === 'Dimension');
     const gdt = data.filter(item => item.type === 'GD&T');
