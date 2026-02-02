@@ -233,23 +233,67 @@ def extract_items_from_text(text, page_number):
                     "page": page_number
                 })
 
-        # --- 5. GD&T Symbols ---
-        gdt_keywords = {
-            "⏊": "Perpendicularity",
-            "//": "Parallelism",
-            "⌖": "Position",
-            "O": "Cylindricity", 
-            "◎": "Concentricity",
-        }
+        # --- 5. GD&T (Geometric Dimensioning & Tolerancing) ---
+        # Feature Control Frames often look like: [ Symbol | 0.15 | A | B ]
+        # OCR often sees them as: "| 0.15 | A | B" or "1 0.15 1 A 1 B"
         
-        for symbol, name in gdt_keywords.items():
+        # 5a. Fuzzy Symbol Mapping (Common OCR misreads)
+        gdt_fuzzy_map = {
+            "⏊": "Perpendicularity", "_|_": "Perpendicularity", "L": "Perpendicularity",
+            "//": "Parallelism", "||": "Parallelism", "11": "Parallelism",
+            "⌖": "Position", "(+)": "Position", "Q": "Position",  # 'Q' often misread for Position circle+cross
+            "O": "Cylindricity", 
+            "◎": "Concentricity", "(O)": "Concentricity",
+            "∠": "Angularity",
+            "⏥": "Profile of Surface",
+            "⌭": "Profile of Line",
+             "↗": "Runout"
+        }
+
+        # Check for explicit symbols first
+        found_gdt_type = None
+        for symbol, name in gdt_fuzzy_map.items():
             if symbol in line:
-                 items.append({
+                found_gdt_type = name
+                break
+        
+        # 5b. Feature Control Frame Structure Detection
+        # Regex to find: "| 0.15 | A" or "| Ø 0.15 M | A | B"
+        # Separators can be |, 1, I, !, l, or sometimes missing if boxed
+        
+        # Look for the characteristic Value + Datum pattern which is easier to spot than the symbol
+        # Ex: "0.15 A B" or "Ø 0.05 A" with some separators
+        fcf_pattern = r"([ØøQC]?\s*\d+[.,]\d+)\s*(?:[|/!lI1]|\s)\s*([A-Z])"
+        match_fcf = re.search(fcf_pattern, line)
+        
+        if match_fcf or found_gdt_type:
+            # If we found a structure OR a symbol, try to extract the useful parts
+            
+            # Default to Position if we see a frame/datum structure but no symbol (safe bet for hole patterns)
+            # or if the line starts with something that looks like a circle/target
+            if not found_gdt_type:
+                if match_fcf and ("Ø" in line or "Q" in line or "(" in line):
+                     found_gdt_type = "Position (Inferred)"
+                else: 
+                     found_gdt_type = "GD&T Frame"
+
+            # Extract the main value (tolerance)
+            value = "Unknown"
+            if match_fcf:
+                value = match_fcf.group(1).replace(' ', '')
+                if 'Ø' in line or 'Q' in line:
+                    if 'Ø' not in value:
+                        value = 'Ø' + value
+            
+            # Don't add if it's just a loose number we already caught as a dimension
+            # GD&T usually involves Datums (A, B, C)
+            if match_fcf or "A" in line or "B" in line or "C" in line:
+                items.append({
                     "type": "GD&T",
-                    "subtype": name,
-                    "value": "Symbol found",
+                    "subtype": found_gdt_type,
+                    "value": value,
                     "original_text": line,
                     "page": page_number
                 })
-    
+
     return items
