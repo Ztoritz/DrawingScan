@@ -8,36 +8,45 @@ import os
 gemini_client = None
 qwen_client = None
 reader = None
+init_error = None
 
 def init_reader():
     """
     Initializes OCR engines. Checks for API keys to determine mode.
     """
-    global reader, gemini_client, qwen_client
+    global reader, gemini_client, qwen_client, init_error
     
+    init_error = "No Cloud Keys Found"
+
     # Check Qwen First (User Preference)
     qwen_key = os.environ.get("QWEN_API_KEY")
     if qwen_key:
         try:
+            print(f"DEBUG: Found QWEN_API_KEY: {qwen_key[:5]}...")
             from qwen_processor import QwenProcessor
             base_url = os.environ.get("QWEN_BASE_URL")
-            model = os.environ.get("QWEN_MODEL", "qwen/qwen-2.5-vl-72b-instruct") # Default to OpenRouter formatted model
+            model = os.environ.get("QWEN_MODEL", "qwen/qwen-2.5-vl-72b-instruct") 
             print(f"🚀 Initializing Qwen 2.5... (Model: {model})")
             qwen_client = QwenProcessor(api_key=qwen_key, base_url=base_url, model=model)
             print("✅ Qwen 2.5 Connected.")
+            init_error = None
+            return # Success
         except Exception as e:
+            init_error = f"Qwen Init Failed: {str(e)}"
             print(f"⚠️ Failed to connect to Qwen: {e}")
 
     # Check Gemini Second
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    if gemini_key and not qwen_client: # Only load if Qwen isn't active (save resources) or allow fallback? 
-        # For now, exclusivity: If Qwen is set, use Qwen.
+    if gemini_key and not qwen_client:
         print("🚀 Gemini AI Detected. Initializing Cloud Engine...")
         try:
              from gemini_processor import GeminiProcessor
              gemini_client = GeminiProcessor(gemini_key)
              print("✅ Gemini Pro Connected.")
+             init_error = None
+             return
         except Exception as e:
+            init_error = f"Gemini Init Failed: {str(e)}"
             print(f"⚠️ Failed to connect to Gemini: {e}")
     
     # Always load EasyOCR as fallback
@@ -143,10 +152,14 @@ def process_file(file_path):
 
 def get_active_engine():
     """Returns the name of the currently active engine."""
-    global gemini_client
+    global gemini_client, qwen_client, init_error
+    if qwen_client:
+        return f"Qwen 2.5 VL (Cloud)"
     if gemini_client:
         return "Gemini Flash 2.0 (Cloud)"
-    return "EasyOCR (Local)"
+    
+    # Fallback case
+    return f"EASYOCR (LOCAL) - {init_error or 'Unknown Error'}"
 
 def process_file(file_path):
     # Ensure init
